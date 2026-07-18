@@ -1,0 +1,91 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+#  requirements.txt — Python dependencies for Multimodal RAG
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+#  HOW TO INSTALL:
+#    pip install -r requirements.txt
+#
+#  WHAT EACH PACKAGE DOES:
+#
+#  ── CORE RAG ───────────────────────────────────────────────────────────────
+#  sentence-transformers   → SentenceTransformer('all-MiniLM-L6-v2')
+#                            Converts text to embeddings (384-dim vectors)
+#                            Downloads the model on first run (~80MB)
+#
+#  faiss-cpu               → Facebook AI Similarity Search
+#                            Stores and searches embedding vectors quickly
+#                            Use 'faiss-gpu' instead if you have CUDA+cuDNN set up
+#                            For your RTX 3050, faiss-cpu is fine (index is small)
+#
+#  ── LLM / GENERATION ───────────────────────────────────────────────────────
+#  groq                    → Official Groq Python SDK
+#                            Calls Groq cloud API to run LLaMA 3.3 70B
+#                            Groq is extremely fast (hundreds of tokens/sec)
+#                            Free tier available at console.groq.com
+#
+#  ── MULTIMODAL EXTRACTION ──────────────────────────────────────────────────
+#  PyMuPDF                 → Installed as 'fitz', used as `import fitz`
+#                            Opens PDF files and extracts text page by page
+#                            Much faster and more accurate than PyPDF2
+#
+#  openai-whisper          → OpenAI's speech recognition model
+#                            Transcribes audio → text (99 languages including Tamil)
+#                            Downloads the 'base' model (~145MB) on first run
+#                            Runs locally — no API key needed, no cost
+#
+#  moviepy                 → Video processing library
+#                            We use it to extract the audio track from video files
+#                            Depends on ffmpeg (must be installed separately)
+#
+#  ── WEB FRAMEWORK ──────────────────────────────────────────────────────────
+#  fastapi                 → Modern async Python web framework
+#                            Defines our HTTP routes (/upload, /query, /status)
+#                            Auto-generates API docs at http://localhost:8000/docs
+#
+#  uvicorn[standard]       → ASGI server that runs FastAPI
+#                            'standard' includes websockets, watchfiles (auto-reload)
+#
+#  python-multipart        → Required for FastAPI to parse multipart/form-data
+#                            (i.e., file uploads from the browser)
+#
+#  ── UTILITIES ──────────────────────────────────────────────────────────────
+#  python-dotenv           → Reads .env file into os.environ
+#                            Keeps secrets (API keys) out of the source code
+#
+#  numpy                   → Numerical arrays
+#                            Required by FAISS and SentenceTransformers
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Core RAG
+sentence-transformers
+faiss-cpu
+numpy
+
+# LLM
+groq
+
+# Multimodal extraction
+PyMuPDF
+openai-whisper
+moviepy
+
+# Web framework
+fastapi
+uvicorn[standard]
+python-multipart
+
+# Utilities
+python-dotenv
+
+# ── SYSTEM REQUIREMENT (not pip) ───────────────────────────────────────────
+#
+#  ffmpeg must be installed separately for moviepy to work:
+#
+#  Windows:  https://ffmpeg.org/download.html
+#            Add ffmpeg/bin to your PATH environment variable
+#            Verify: open CMD and type: ffmpeg -version
+#
+#  Or with conda: conda install -c conda-forge ffmpeg
+#
+# ══════════════════════════════════════════════════════════════════════════════
