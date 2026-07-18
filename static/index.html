@@ -1,0 +1,1025 @@
+<!DOCTYPE html>
+<!--
+===============================================================
+  MULTIMODAL RAG — static/index.html
+  The entire frontend: HTML structure + CSS styling + JavaScript logic
+===============================================================
+
+WHAT THIS FILE DOES:
+  This is the single-page application (SPA) that the user sees in their browser.
+  It does three things:
+    1. HTML:       defines the structure of the page (buttons, upload areas, chat)
+    2. CSS:        makes it look good (colors, layout, animations)
+    3. JavaScript: makes it interactive (upload file, send message, show response)
+
+HOW IT COMMUNICATES WITH THE BACKEND:
+  The JavaScript uses the Fetch API to make HTTP requests to our FastAPI server:
+    - POST /upload  → sends the uploaded file
+    - POST /query   → sends the user's question, gets an answer
+    - GET  /status  → checks if a file is already loaded
+
+THIS IS A "VANILLA" FRONTEND:
+  No React, no Vue, no build step needed. Pure HTML + CSS + JS.
+  This makes it easy to understand and modify.
+===============================================================
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Multimodal RAG</title>
+
+  <!-- Google Font: Space Grotesk for clean, technical look -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet" />
+
+  <style>
+    /* ── CSS RESET & ROOT VARIABLES ──────────────────────────────────────── */
+    /* CSS variables (custom properties) let us change colors in one place    */
+    :root {
+      --bg:       #0f1117;   /* main background — near black                 */
+      --surface:  #1a1d27;   /* card/panel background                        */
+      --border:   #2a2d3a;   /* subtle border color                          */
+      --accent:   #1d9e75;   /* teal green — primary brand color             */
+      --accent2:  #534ab7;   /* purple — secondary accent                    */
+      --text:     #e8eaf0;   /* main text — off-white                        */
+      --muted:    #8b8fa8;   /* secondary text — gray                        */
+      --danger:   #e24b4a;   /* error red                                    */
+      --pdf-col:  #d85a30;   /* coral — PDF badge color                      */
+      --aud-col:  #ba7517;   /* amber — Audio badge color                    */
+      --vid-col:  #7f77dd;   /* purple — Video badge color                   */
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Space Grotesk', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* ── HEADER ───────────────────────────────────────────────────────────── */
+    header {
+      width: 100%;
+      max-width: 860px;
+      padding: 2rem 1.5rem 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /* The colored dot before the title */
+    .logo-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--accent);
+      /* Pulsing glow animation to indicate "live" */
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(29, 158, 117, 0.4); }
+      50%       { box-shadow: 0 0 0 6px rgba(29, 158, 117, 0);  }
+    }
+
+    .logo h1 {
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: -0.3px;
+    }
+
+    .logo h1 span { color: var(--accent); }
+
+    /* Status badge in the top-right corner */
+    #status-badge {
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      background: var(--surface);
+      transition: all 0.3s;
+    }
+
+    #status-badge.ready {
+      color: var(--accent);
+      border-color: var(--accent);
+      background: rgba(29, 158, 117, 0.08);
+    }
+
+    /* ── MAIN LAYOUT ──────────────────────────────────────────────────────── */
+    main {
+      width: 100%;
+      max-width: 860px;
+      padding: 0 1.5rem 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    /* ── UPLOAD SECTION ───────────────────────────────────────────────────── */
+    .upload-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 1.25rem;
+    }
+
+    .section-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 1rem;
+    }
+
+    /* Grid of 3 upload cards (PDF, Audio, Video) */
+    .upload-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-bottom: 1rem;
+    }
+
+    /* Each upload card */
+    .upload-card {
+      position: relative;
+      border: 1.5px dashed var(--border);
+      border-radius: 10px;
+      padding: 1.25rem 0.75rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s, transform 0.1s;
+      background: transparent;
+    }
+
+    .upload-card:hover {
+      border-color: var(--accent);
+      background: rgba(29, 158, 117, 0.04);
+      transform: translateY(-2px);  /* subtle lift on hover */
+    }
+
+    /* When a file is successfully loaded into this slot */
+    .upload-card.loaded {
+      border-style: solid;
+      border-color: var(--accent);
+      background: rgba(29, 158, 117, 0.07);
+    }
+
+    /* Hide the actual <input type="file"> — we style our own card instead */
+    .upload-card input[type="file"] { display: none; }
+
+    .card-icon { font-size: 24px; margin-bottom: 6px; }
+
+    .card-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 3px;
+    }
+
+    .card-subtitle {
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    /* Small colored pill in top-right of a loaded card */
+    .card-badge {
+      display: none;
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 10px;
+      background: var(--accent);
+      color: #0f1117;
+    }
+
+    .upload-card.loaded .card-badge { display: block; }
+
+    /* ── PROGRESS BAR ─────────────────────────────────────────────────────── */
+    /* Shown while the backend is processing the uploaded file */
+    #progress-section {
+      display: none;
+      background: rgba(29, 158, 117, 0.05);
+      border: 1px solid rgba(29, 158, 117, 0.2);
+      border-radius: 10px;
+      padding: 0.85rem 1rem;
+    }
+
+    #progress-label {
+      font-size: 12px;
+      color: var(--accent);
+      margin-bottom: 8px;
+    }
+
+    .progress-track {
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+
+    /* The animated fill — width controlled by JS */
+    #progress-fill {
+      height: 100%;
+      width: 0%;
+      background: var(--accent);
+      border-radius: 2px;
+      transition: width 0.5s ease;
+    }
+
+    /* Small step pills: "Extracting → Chunking → Embedding → Indexing" */
+    #pipeline-steps {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .step-pill {
+      font-size: 11px;
+      padding: 3px 9px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      transition: all 0.3s;
+    }
+
+    .step-pill.active {
+      background: rgba(55, 138, 221, 0.15);
+      border-color: #378add;
+      color: #85b7eb;
+    }
+
+    .step-pill.done {
+      background: rgba(29, 158, 117, 0.15);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* ── CHAT SECTION ─────────────────────────────────────────────────────── */
+    .chat-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .chat-header {
+      padding: 0.85rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /* Colored source type tag */
+    #source-tag {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 9px;
+      border-radius: 10px;
+      background: var(--border);
+      color: var(--muted);
+    }
+
+    #source-tag.pdf   { background: rgba(216, 90, 48, 0.15); color: var(--pdf-col); }
+    #source-tag.audio { background: rgba(186, 117, 23, 0.15); color: var(--aud-col); }
+    #source-tag.video { background: rgba(127, 119, 221, 0.15); color: var(--vid-col); }
+
+    #source-name {
+      font-size: 13px;
+      color: var(--muted);
+      margin-left: auto;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 200px;
+    }
+
+    /* Scrollable message list */
+    #messages {
+      padding: 1.25rem;
+      min-height: 260px;
+      max-height: 400px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    /* Thin custom scrollbar */
+    #messages::-webkit-scrollbar { width: 4px; }
+    #messages::-webkit-scrollbar-track { background: transparent; }
+    #messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    /* Individual message row */
+    .message {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* User messages go to the right */
+    .message.user { flex-direction: row-reverse; }
+
+    /* Avatar circle */
+    .avatar {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+
+    .message.ai   .avatar { background: rgba(29, 158, 117, 0.15); color: var(--accent); }
+    .message.user .avatar { background: rgba(83, 74, 183, 0.15); color: var(--accent2); }
+
+    /* Message bubble */
+    .bubble {
+      max-width: 78%;
+      padding: 0.7rem 1rem;
+      border-radius: 12px;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .message.ai .bubble {
+      background: rgba(255,255,255,0.04);
+      color: var(--text);
+      border-bottom-left-radius: 4px;
+    }
+
+    .message.user .bubble {
+      background: rgba(83, 74, 183, 0.15);
+      color: var(--text);
+      border-bottom-right-radius: 4px;
+    }
+
+    /* Typing animation: three bouncing dots */
+    .typing-dots {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+      padding: 4px 0;
+    }
+
+    .typing-dots span {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--muted);
+      animation: bounce 1.2s infinite;
+    }
+
+    .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+    @keyframes bounce {
+      0%, 80%, 100% { transform: scale(0.7); opacity: 0.5; }
+      40%            { transform: scale(1.1); opacity: 1; }
+    }
+
+    /* ── CHAT INPUT ───────────────────────────────────────────────────────── */
+    .chat-input-row {
+      padding: 0.85rem 1.25rem;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    #chat-input {
+      flex: 1;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 9px 14px;
+      font-size: 14px;
+      color: var(--text);
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    #chat-input::placeholder { color: var(--muted); }
+
+    #chat-input:focus { border-color: var(--accent); }
+
+    /* Send button */
+    #send-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      background: var(--accent);
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 0.2s, transform 0.1s;
+      flex-shrink: 0;
+    }
+
+    #send-btn:hover  { opacity: 0.85; }
+    #send-btn:active { transform: scale(0.94); }
+    #send-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+    #send-btn svg { width: 16px; height: 16px; fill: #0f1117; }
+
+    /* ── SUGGESTION CHIPS ─────────────────────────────────────────────────── */
+    /* Quick question buttons shown in the empty chat state */
+    .suggestions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      padding: 0 1.25rem 1rem;
+    }
+
+    .chip {
+      font-size: 12px;
+      padding: 5px 12px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      background: transparent;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all 0.15s;
+    }
+
+    .chip:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(29, 158, 117, 0.06);
+    }
+
+    /* ── ERROR TOAST ──────────────────────────────────────────────────────── */
+    #error-toast {
+      display: none;
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      background: rgba(226, 75, 74, 0.15);
+      border: 1px solid var(--danger);
+      color: var(--danger);
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      z-index: 100;
+      animation: fadeIn 0.2s ease;
+    }
+  </style>
+</head>
+
+<body>
+  <!-- ── HEADER ─────────────────────────────────────────────────────────── -->
+  <header>
+    <div class="logo">
+      <div class="logo-dot"></div>
+      <h1>Multimodal <span>RAG</span></h1>
+    </div>
+    <div id="status-badge">No file loaded</div>
+  </header>
+
+  <!-- ── MAIN ───────────────────────────────────────────────────────────── -->
+  <main>
+
+    <!-- UPLOAD SECTION -->
+    <div class="upload-section">
+      <div class="section-label">Upload Source</div>
+
+      <div class="upload-grid">
+        <!-- PDF Upload Card -->
+        <div class="upload-card" id="card-pdf" onclick="triggerUpload('pdf')">
+          <input type="file" id="input-pdf" accept=".pdf" onchange="handleUpload('pdf', this)" />
+          <div class="card-badge">loaded</div>
+          <div class="card-icon">📄</div>
+          <div class="card-title">PDF</div>
+          <div class="card-subtitle">Text extracted directly</div>
+        </div>
+
+        <!-- Audio Upload Card -->
+        <div class="upload-card" id="card-audio" onclick="triggerUpload('audio')">
+          <input type="file" id="input-audio" accept=".mp3,.wav,.m4a,.ogg,.flac" onchange="handleUpload('audio', this)" />
+          <div class="card-badge">loaded</div>
+          <div class="card-icon">🎙️</div>
+          <div class="card-title">Audio</div>
+          <div class="card-subtitle">Transcribed via Whisper</div>
+        </div>
+
+        <!-- Video Upload Card -->
+        <div class="upload-card" id="card-video" onclick="triggerUpload('video')">
+          <input type="file" id="input-video" accept=".mp4,.mov,.webm,.mkv" onchange="handleUpload('video', this)" />
+          <div class="card-badge">loaded</div>
+          <div class="card-icon">🎬</div>
+          <div class="card-title">Video</div>
+          <div class="card-subtitle">Audio extracted → transcribed</div>
+        </div>
+      </div>
+
+      <!-- PROGRESS BAR (hidden until upload starts) -->
+      <div id="progress-section">
+        <div id="progress-label">Processing...</div>
+        <div class="progress-track">
+          <div id="progress-fill"></div>
+        </div>
+        <div id="pipeline-steps"></div>
+      </div>
+    </div>
+
+    <!-- CHAT SECTION -->
+    <div class="chat-section">
+      <div class="chat-header">
+        <span id="source-tag">no source</span>
+        <span id="source-name">Upload a file to begin</span>
+      </div>
+
+      <!-- Message list -->
+      <div id="messages">
+        <div class="message ai">
+          <div class="avatar">AI</div>
+          <div class="bubble">
+            Hello! Upload a <strong>PDF</strong>, <strong>audio clip</strong>, or <strong>video</strong> and I'll answer any questions about its content using RAG.
+          </div>
+        </div>
+      </div>
+
+      <!-- Suggestion chips (hidden after first message) -->
+      <div class="suggestions" id="suggestions">
+        <button class="chip" onclick="useChip(this)">What is this document about?</button>
+        <button class="chip" onclick="useChip(this)">Summarize the key points</button>
+        <button class="chip" onclick="useChip(this)">What materials were used?</button>
+        <button class="chip" onclick="useChip(this)">Who is the author?</button>
+      </div>
+
+      <!-- Input row -->
+      <div class="chat-input-row">
+        <input
+          type="text"
+          id="chat-input"
+          placeholder="Ask a question about the uploaded file..."
+          onkeydown="if(event.key==='Enter' && !event.shiftKey) sendMessage()"
+        />
+        <button id="send-btn" onclick="sendMessage()" disabled>
+          <!-- Paper-plane icon as inline SVG -->
+          <svg viewBox="0 0 24 24"><path d="M2 21L23 12 2 3v7l15 2-15 2z"/></svg>
+        </button>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Error toast notification -->
+  <div id="error-toast"></div>
+
+  <!-- ── JAVASCRIPT ──────────────────────────────────────────────────────── -->
+  <script>
+    /*
+    ═══════════════════════════════════════════════════════════════════════
+    JAVASCRIPT OVERVIEW
+
+    This script handles all client-side logic:
+      1. File upload: send file to backend, animate progress, update UI
+      2. Chat: send question, display answer, handle loading state
+      3. Helper utilities: show errors, animate steps, update status
+
+    HOW BROWSER-BACKEND COMMUNICATION WORKS:
+      We use the Fetch API (built into all modern browsers):
+        fetch(url, options) returns a Promise
+        await fetch(...) waits for the HTTP response
+        response.json() parses the JSON body
+
+      Example:
+        const res = await fetch('/query', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: "What is this about?" })
+        });
+        const data = await res.json();
+        console.log(data.answer);
+    ═══════════════════════════════════════════════════════════════════════
+    */
+
+    // ── STATE ──────────────────────────────────────────────────────────────
+    // These variables track the application's current state
+    let isFileLoaded = false;     // true after a file is successfully indexed
+    let isProcessing = false;     // true while upload or query is in progress
+
+    // Pipeline steps for each file type (shown during upload animation)
+    const PIPELINE_STEPS = {
+      pdf:   ['Extract text', 'Chunk', 'Embed', 'Index'],
+      audio: ['Transcribe', 'Chunk', 'Embed', 'Index'],
+      video: ['Extract audio', 'Transcribe', 'Chunk', 'Embed', 'Index']
+    };
+
+    // ── UPLOAD LOGIC ───────────────────────────────────────────────────────
+
+    function triggerUpload(type) {
+      /*
+      WHAT: Programmatically click the hidden <input type="file"> element.
+
+      WHY:
+        We style our own <div class="upload-card"> to look nice.
+        The actual <input type="file"> (which opens the file picker dialog)
+        is invisible (display:none). We trigger it with .click().
+
+      PARAMETER:
+        type: "pdf", "audio", or "video"
+      */
+      document.getElementById('input-' + type).click();
+    }
+
+    async function handleUpload(type, inputElement) {
+      /*
+      WHAT: Called when the user selects a file. Sends it to the backend.
+
+      STEPS:
+        1. Get the File object from the input element
+        2. Create a FormData object (browser's way of encoding file uploads)
+        3. POST to /upload using Fetch API
+        4. Animate the progress bar while waiting
+        5. Update the UI on success or show an error on failure
+
+      WHY FORMDATA:
+        HTTP file uploads use "multipart/form-data" encoding.
+        FormData handles all the encoding automatically — we just .append() to it.
+        FastAPI on the backend receives it as an UploadFile.
+
+      PARAMETER:
+        type:          "pdf", "audio", or "video"
+        inputElement:  the <input type="file"> DOM element
+      */
+      const file = inputElement.files[0];   // files[0] = the first selected file
+      if (!file) return;                    // user cancelled the dialog
+
+      if (isProcessing) return;             // prevent double-uploads
+      isProcessing = true;
+
+      // Show the progress section
+      showProgress(type, file.name);
+
+      try {
+        // FormData: a key-value container that encodes files for HTTP upload
+        const formData = new FormData();
+        formData.append('file', file);             // the actual file bytes
+        formData.append('source_type', type);      // "pdf", "audio", or "video"
+
+        // Simulate step animation while the real upload happens
+        // (the real processing is happening on the server simultaneously)
+        animateSteps(type);
+
+        // POST the FormData to /upload
+        // Note: don't set Content-Type header — browser sets it automatically
+        // with the correct boundary string for multipart/form-data
+        const response = await fetch('/upload', {
+          method: 'POST',
+          body: formData
+          // NO 'Content-Type' header — browser sets it automatically for FormData
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          // response.ok is false for 4xx and 5xx status codes
+          throw new Error(data.detail || 'Upload failed');
+        }
+
+        // Success: update UI
+        document.getElementById('card-' + type).classList.add('loaded');
+        isFileLoaded = true;
+        updateStatus(data.source_type, data.filename, data.chunks_indexed);
+        hideProgress(`✓ Indexed ${data.chunks_indexed} chunks from ${data.filename}`);
+        document.getElementById('send-btn').disabled = false;
+
+      } catch (err) {
+        showError(err.message);
+        hideProgress('');
+      } finally {
+        isProcessing = false;
+        inputElement.value = '';   // reset input so same file can be re-uploaded
+      }
+    }
+
+    function showProgress(type, filename) {
+      /*
+      WHAT: Shows the progress bar and initializes the step pills.
+
+      The progress bar is cosmetic — it fills up as we animate steps.
+      The actual server processing might be faster or slower than the animation.
+      */
+      const section = document.getElementById('progress-section');
+      const label   = document.getElementById('progress-label');
+      const fill    = document.getElementById('progress-fill');
+      const steps   = document.getElementById('pipeline-steps');
+
+      section.style.display = 'block';
+      label.textContent = `Processing ${filename}...`;
+      fill.style.width = '0%';
+
+      // Create one pill per step
+      const stepNames = PIPELINE_STEPS[type] || [];
+      steps.innerHTML = stepNames.map((s, i) =>
+        `<span class="step-pill" id="step-${i}">${s}</span>`
+      ).join('');
+    }
+
+    function animateSteps(type) {
+      /*
+      WHAT: Lights up each pipeline step pill one by one with a delay.
+
+      HOW:
+        setTimeout() schedules a function to run after a delay.
+        We chain them: step 0 at 300ms, step 1 at 900ms, step 2 at 1500ms, etc.
+        Each step turns "active" (blue) then the previous turns "done" (green).
+      */
+      const steps = PIPELINE_STEPS[type] || [];
+      const fill  = document.getElementById('progress-fill');
+
+      steps.forEach((_, i) => {
+        setTimeout(() => {
+          // Mark previous step as done
+          if (i > 0) {
+            const prev = document.getElementById('step-' + (i - 1));
+            if (prev) prev.className = 'step-pill done';
+          }
+          // Mark current step as active
+          const curr = document.getElementById('step-' + i);
+          if (curr) curr.className = 'step-pill active';
+
+          // Advance progress bar
+          fill.style.width = ((i + 1) / steps.length * 90) + '%';  // 90% max during steps
+
+        }, 300 + i * 600);  // 300ms first delay, then every 600ms
+      });
+    }
+
+    function hideProgress(message) {
+      /*
+      WHAT: Hides the progress bar after processing is done.
+
+      If message is provided, briefly show it before hiding.
+      */
+      const label = document.getElementById('progress-label');
+      const fill  = document.getElementById('progress-fill');
+      const steps = document.querySelectorAll('.step-pill');
+
+      // Complete all steps to green
+      fill.style.width = '100%';
+      steps.forEach(s => s.className = 'step-pill done');
+
+      if (message) {
+        label.textContent = message;
+        setTimeout(() => {
+          document.getElementById('progress-section').style.display = 'none';
+        }, 2000);   // hide after 2 seconds
+      } else {
+        document.getElementById('progress-section').style.display = 'none';
+      }
+    }
+
+    function updateStatus(type, filename, chunks) {
+      /*
+      WHAT: Updates the status badge (top-right) and chat header after upload.
+      */
+      // Status badge in header
+      const badge = document.getElementById('status-badge');
+      badge.textContent = `${chunks} chunks indexed`;
+      badge.classList.add('ready');
+
+      // Source tag color in chat header
+      const tag = document.getElementById('source-tag');
+      tag.textContent = type;
+      tag.className = type;   // CSS class "pdf", "audio", or "video" applies color
+
+      // Source filename
+      const nameEl = document.getElementById('source-name');
+      nameEl.textContent = filename.length > 30
+        ? filename.slice(0, 28) + '...'
+        : filename;
+    }
+
+    // ── CHAT LOGIC ─────────────────────────────────────────────────────────
+
+    async function sendMessage() {
+      /*
+      WHAT: Sends the user's question to /query and displays the answer.
+
+      STEPS:
+        1. Read the query from the input field
+        2. Add the user's message to the chat
+        3. Show a "typing" animation
+        4. POST to /query with the question
+        5. Replace typing animation with the actual answer
+        6. Handle errors
+
+      WHY async/await:
+        fetch() is asynchronous — it returns a Promise.
+        await pauses execution until the Promise resolves (response received).
+        This means the UI doesn't freeze while waiting for the server.
+      */
+      const input = document.getElementById('chat-input');
+      const query = input.value.trim();
+
+      if (!query) return;
+      if (!isFileLoaded) {
+        showError('Please upload a file first.');
+        return;
+      }
+      if (isProcessing) return;
+
+      isProcessing = true;
+      input.value = '';
+
+      // Hide suggestion chips after first real message
+      document.getElementById('suggestions').style.display = 'none';
+
+      // Add user's message to chat
+      addMessage('user', query);
+
+      // Add typing indicator (AI is "thinking")
+      const typingEl = addTypingIndicator();
+
+      try {
+        // POST the query as JSON
+        const response = await fetch('/query', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query })   // converts JS object → JSON string
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.detail || 'Query failed');
+        }
+
+        // Remove typing indicator and show real answer
+        typingEl.remove();
+        addMessage('ai', data.answer);
+
+      } catch (err) {
+        typingEl.remove();
+        addMessage('ai', `Error: ${err.message}`);
+        showError(err.message);
+      } finally {
+        isProcessing = false;
+      }
+    }
+
+    function addMessage(role, text) {
+      /*
+      WHAT: Creates a message bubble and adds it to the chat.
+
+      HOW DOM MANIPULATION WORKS:
+        - document.createElement('div') creates a new HTML element
+        - element.className = '...' sets its CSS class
+        - element.textContent = '...' sets its text (safe — no XSS risk)
+        - parent.appendChild(child) adds it to the page
+        - messages.scrollTop = messages.scrollHeight scrolls to the bottom
+
+      PARAMETERS:
+        role: "user" or "ai"
+        text: the message content
+      */
+      const messages = document.getElementById('messages');
+
+      const row = document.createElement('div');
+      row.className = `message ${role}`;
+
+      const avatar = document.createElement('div');
+      avatar.className = 'avatar';
+      avatar.textContent = role === 'ai' ? 'AI' : 'Me';
+
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
+      bubble.textContent = text;   // textContent is safe (no HTML injection)
+
+      row.appendChild(avatar);
+      row.appendChild(bubble);
+      messages.appendChild(row);
+
+      // Auto-scroll to the newest message
+      messages.scrollTop = messages.scrollHeight;
+
+      return row;
+    }
+
+    function addTypingIndicator() {
+      /*
+      WHAT: Adds the "AI is thinking" animation bubble.
+
+      The three-dot animation is pure CSS (defined above in the <style> block).
+      We just add the right HTML and CSS does the rest.
+
+      RETURNS:
+        The DOM element so the caller can .remove() it later.
+      */
+      const messages = document.getElementById('messages');
+
+      const row = document.createElement('div');
+      row.className = 'message ai';
+
+      const avatar = document.createElement('div');
+      avatar.className = 'avatar';
+      avatar.textContent = 'AI';
+
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
+      bubble.innerHTML = '<div class="typing-dots"><span></span><span></span><span></span></div>';
+
+      row.appendChild(avatar);
+      row.appendChild(bubble);
+      messages.appendChild(row);
+      messages.scrollTop = messages.scrollHeight;
+
+      return row;   // caller stores this to remove it later
+    }
+
+    function useChip(chipElement) {
+      /*
+      WHAT: Fills the chat input with a suggestion chip's text and sends it.
+
+      The suggestion chips are pre-written questions for new users.
+      Clicking one puts the text in the input and immediately sends it.
+      */
+      const text = chipElement.textContent;
+      document.getElementById('chat-input').value = text;
+      sendMessage();
+    }
+
+    // ── ERROR HANDLING ─────────────────────────────────────────────────────
+
+    function showError(message) {
+      /*
+      WHAT: Shows a red toast notification at the bottom-right of the screen.
+      Automatically hides after 4 seconds.
+      */
+      const toast = document.getElementById('error-toast');
+      toast.textContent = message;
+      toast.style.display = 'block';
+      setTimeout(() => { toast.style.display = 'none'; }, 4000);
+    }
+
+    // ── INITIALIZATION ─────────────────────────────────────────────────────
+
+    async function init() {
+      /*
+      WHAT: Called when the page loads. Checks if a file is already indexed.
+
+      WHY:
+        If the server is already running with a file loaded (e.g., we refreshed
+        the page), we want the UI to reflect that immediately.
+
+      HOW:
+        GET /status returns { ready: bool, source: str, source_type: str, chunks: int }
+      */
+      try {
+        const res  = await fetch('/status');
+        const data = await res.json();
+
+        if (data.ready) {
+          isFileLoaded = true;
+          updateStatus(data.source_type, data.source, data.chunks);
+          document.getElementById('card-' + data.source_type)?.classList.add('loaded');
+          document.getElementById('send-btn').disabled = false;
+        }
+      } catch (e) {
+        // Server not reachable — just show default empty state
+        console.log('Status check failed:', e);
+      }
+    }
+
+    // Run init when the page finishes loading
+    // DOMContentLoaded fires when HTML is parsed (before images load)
+    document.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>
